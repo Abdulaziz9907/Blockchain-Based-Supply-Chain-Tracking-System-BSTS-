@@ -1,30 +1,17 @@
 // src/components/AdminDashboard.js
-import React, { useState, useEffect } from "react";
-import { isAddress } from "ethers";
+import React, { useState } from "react";
 
 function AdminDashboard({
   users,
   onCreateUser,
   onDeleteUser,
-  onUpdateAdminEthAddress
+  onUpdateAdminEthAddress // still here in case it's used elsewhere
 }) {
   const [form, setForm] = useState({
     username: "",
     password: "",
     role: ""
   });
-
-  const adminUser = users.find((u) => u.username === "admin");
-  const adminEth = adminUser?.ethAddress || "(not set)";
-
-  const [editingAdminEth, setEditingAdminEth] = useState(false);
-  const [adminEthInput, setAdminEthInput] = useState(adminEth);
-  const [adminEthError, setAdminEthError] = useState("");
-
-  useEffect(() => {
-    setAdminEthInput(adminEth);
-    setAdminEthError("");
-  }, [adminEth]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -34,16 +21,6 @@ function AdminDashboard({
       password: "",
       role: ""
     });
-  };
-
-  const handleSaveAdminEth = () => {
-    const trimmed = adminEthInput.trim();
-    if (!isAddress(trimmed)) {
-      setAdminEthError("Please enter a valid Ethereum address (0x + 40 hex).");
-      return;
-    }
-    onUpdateAdminEthAddress(trimmed);
-    setEditingAdminEth(false);
   };
 
   return (
@@ -78,124 +55,7 @@ function AdminDashboard({
           locally (demo only) and not shown here.
         </p>
 
-        {/* NEW: Admin ETH address editor */}
-        <div
-          style={{
-            marginBottom: "1.25rem",
-            padding: "0.75rem 0.9rem",
-            borderRadius: "0.75rem",
-            border: "1px solid #1f2937",
-            background: "#020617"
-          }}
-        >
-          <div
-            style={{
-              fontSize: "0.85rem",
-              marginBottom: "0.35rem",
-              fontWeight: 600
-            }}
-          >
-            Admin ETH address
-          </div>
-
-          {!editingAdminEth ? (
-            <>
-              <div
-                style={{
-                  fontFamily: "monospace",
-                  fontSize: "0.8rem",
-                  wordBreak: "break-all",
-                  marginBottom: "0.5rem"
-                }}
-              >
-                {adminEth}
-              </div>
-              <button
-                onClick={() => setEditingAdminEth(true)}
-                style={{
-                  background: "#111827",
-                  color: "#e5e7eb",
-                  border: "none",
-                  padding: "0.35rem 0.9rem",
-                  borderRadius: "999px",
-                  cursor: "pointer",
-                  fontSize: "0.8rem"
-                }}
-              >
-                Change address
-              </button>
-            </>
-          ) : (
-            <>
-              <input
-                style={{
-                  width: "100%",
-                  marginBottom: "0.35rem",
-                  padding: "0.45rem 0.6rem",
-                  borderRadius: "0.6rem",
-                  border: "1px solid #374151",
-                  background: "#020617",
-                  color: "#f9fafb",
-                  fontSize: "0.8rem",
-                  outline: "none",
-                  fontFamily: "monospace"
-                }}
-                placeholder="0x..."
-                value={adminEthInput}
-                onChange={(e) => setAdminEthInput(e.target.value)}
-              />
-              {adminEthError && (
-                <div
-                  style={{
-                    marginBottom: "0.4rem",
-                    fontSize: "0.75rem",
-                    color: "#f97373"
-                  }}
-                >
-                  {adminEthError}
-                </div>
-              )}
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button
-                  type="button"
-                  onClick={handleSaveAdminEth}
-                  style={{
-                    background:
-                      "linear-gradient(to right, #22c55e, #38bdf8)",
-                    color: "#020617",
-                    border: "none",
-                    padding: "0.35rem 0.9rem",
-                    borderRadius: "999px",
-                    cursor: "pointer",
-                    fontSize: "0.8rem",
-                    fontWeight: 600
-                  }}
-                >
-                  Save
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingAdminEth(false);
-                    setAdminEthInput(adminEth);
-                    setAdminEthError("");
-                  }}
-                  style={{
-                    background: "#111827",
-                    color: "#e5e7eb",
-                    border: "none",
-                    padding: "0.35rem 0.9rem",
-                    borderRadius: "999px",
-                    cursor: "pointer",
-                    fontSize: "0.8rem"
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        {/* Admin ETH address editor removed */}
 
         <h3 style={{ marginBottom: "0.5rem", fontSize: "1rem" }}>
           Existing Users
@@ -239,7 +99,9 @@ function AdminDashboard({
                         fontSize: "0.8rem"
                       }}
                     >
-                      {u.ethAddress || "—"}
+                      {u.username === "admin"
+                        ? "—"
+                        : (u.ethAddress || "—")}
                     </span>
                   </td>
                   <td style={tdStyle}>

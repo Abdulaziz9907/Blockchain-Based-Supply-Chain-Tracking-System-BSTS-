@@ -46,26 +46,7 @@ function App() {
     }
   }, []);
 
-  // Ensure default admin gets an ETH keypair the first time
-  useEffect(() => {
-    setUsers((prev) => {
-      const admin = prev.find((u) => u.username === "admin");
-      if (admin && !admin.ethAddress) {
-        const wallet = Wallet.createRandom();
-        const next = prev.map((u) =>
-          u.username === "admin"
-            ? {
-                ...u,
-                ethAddress: wallet.address,
-                privateKey: wallet.privateKey
-              }
-            : u
-        );
-        return next;
-      }
-      return prev;
-    });
-  }, []);
+  // (Removed) auto-ETH keypair creation for admin user
 
   // Persist state
   useEffect(() => {
@@ -212,7 +193,7 @@ function App() {
       return;
     }
 
-    // Always create a new Sepolia keypair for the user
+    // Always create a new Sepolia keypair for the user (non-admin)
     const wallet = Wallet.createRandom();
     const ethAddress = wallet.address;
     const privateKey = wallet.privateKey;
@@ -242,7 +223,8 @@ function App() {
     setStatus(`User '${user.username}' deleted.`);
   };
 
-  // ✅ NEW: allow changing admin ETH address from UI
+  // ✅ This still exists but is now effectively unused,
+  // and admin doesn't get/need an ETH address in the UI.
   const handleUpdateAdminEthAddress = (newAddress) => {
     if (!isAddress(newAddress)) {
       setStatus("Admin ETH address must be a valid Ethereum address.");
@@ -252,7 +234,7 @@ function App() {
     setUsers((prev) =>
       prev.map((u) =>
         u.username === "admin"
-          ? { ...u, ethAddress: newAddress, privateKey: "" } // we don't know the private key
+          ? { ...u, ethAddress: newAddress, privateKey: "" }
           : u
       )
     );
@@ -682,6 +664,7 @@ function App() {
   const userEth = currentUser.ethAddress || "not assigned";
 
   const userEthMismatch =
+    currentUser.role !== "admin" &&
     account &&
     currentUser.ethAddress &&
     account.toLowerCase() !== currentUser.ethAddress.toLowerCase();
@@ -729,22 +712,26 @@ function App() {
                 — Welcome, {currentUser.username}.
               </span>
             </p>
-            <p
-              style={{
-                margin: 0,
-                marginTop: "0.25rem",
-                fontSize: "0.8rem",
-                color: "#9ca3af"
-              }}
-            >
-              User ETH address:&nbsp;
-              <span style={{ fontFamily: "monospace" }}>{userEth}</span>
-              {userEthMismatch && (
-                <span style={{ color: "#f97373", marginLeft: "0.25rem" }}>
-                  (⚠ MetaMask account is different)
-                </span>
-              )}
-            </p>
+
+            {/* Hide ETH address + MetaMask mismatch line for admin */}
+            {currentUser.role !== "admin" && (
+              <p
+                style={{
+                  margin: 0,
+                  marginTop: "0.25rem",
+                  fontSize: "0.8rem",
+                  color: "#9ca3af"
+                }}
+              >
+                User ETH address:&nbsp;
+                <span style={{ fontFamily: "monospace" }}>{userEth}</span>
+                {userEthMismatch && (
+                  <span style={{ color: "#f97373", marginLeft: "0.25rem" }}>
+                    (⚠ MetaMask account is different)
+                  </span>
+                )}
+              </p>
+            )}
           </div>
 
           {headerRight}
