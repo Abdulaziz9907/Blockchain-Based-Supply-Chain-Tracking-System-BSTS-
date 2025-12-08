@@ -1,82 +1,89 @@
 // src/App.js
 import React, { useEffect, useState } from "react";
+import { Wallet, parseEther, isAddress } from "ethers";
+
+import { loadUsers, saveUsers, loadProducts, saveProducts } from "./dataStore";
 import {
-  BrowserProvider,
-  Contract,
-  keccak256,
-  toUtf8Bytes,
-  parseEther,
-  formatEther
-} from "ethers";
-import { contractAddress, contractABI } from "./contractConfig";
+  getEthereum,
+  getProductsChainContract,
+  buildProductMetaHash,
+  DEFAULT_CHAIN_ID
+} from "./ethHelpers";
+import {
+  loadContractAddress,
+  saveContractAddress
+} from "./contractConfig";
+
+import LoginScreen from "./components/LoginScreen";
+import AdminDashboard from "./components/AdminDashboard";
+import ProducerDashboard from "./components/ProducerDashboard";
+import SupplierDashboard from "./components/SupplierDashboard";
+import ConsumerDashboard from "./components/ConsumerDashboard";
+
+const ROLES = ["admin", "producer", "supplier", "consumer"];
 
 function App() {
-  const [hasMetaMask, setHasMetaMask] = useState(false);
-  const [account, setAccount] = useState(null);
-  const [chainId, setChainId] = useState(null);
+  const [users, setUsers] = useState(loadUsers);
+  const [products, setProducts] = useState(loadProducts);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [activeView, setActiveView] = useState("login");
 
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Form state for registering a product
-  const [productForm, setProductForm] = useState({
-    name: "",
-    description: "",
-    batchId: "",
-    priceEth: "",
-    qty: ""
-  });
+  const [hasMetaMask, setHasMetaMask] = useState(false);
+  const [account, setAccount] = useState(null); // MetaMask account
+  const [chainId, setChainId] = useState(null);
 
-  // State for viewing a product
-  const [viewId, setViewId] = useState("");
-  const [productInfo, setProductInfo] = useState(null);
+  const [contractAddress, setContractAddress] = useState(null);
+  const [showContractModal, setShowContractModal] = useState(false);
 
-  // ---------- Helpers ----------
-
-  const getEthereum = () => {
-    if (typeof window !== "undefined" && window.ethereum) {
-      return window.ethereum;
+  // Remove white body margin + set global background
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.body.style.margin = "0";
+      document.body.style.backgroundColor = "#020617";
     }
-    return undefined;
-  };
+  }, []);
 
-  const getContract = async () => {
-    const ethereum = getEthereum();
-    if (!ethereum) throw new Error("MetaMask not found");
+  // Ensure default admin gets an ETH keypair the first time
+  useEffect(() => {
+    setUsers((prev) => {
+      const admin = prev.find((u) => u.username === "admin");
+      if (admin && !admin.ethAddress) {
+        const wallet = Wallet.createRandom();
+        const next = prev.map((u) =>
+          u.username === "admin"
+            ? {
+                ...u,
+                ethAddress: wallet.address,
+                privateKey: wallet.privateKey
+              }
+            : u
+        );
+        return next;
+      }
+      return prev;
+    });
+  }, []);
 
-    // ethers v6: BrowserProvider instead of Web3Provider
-    const provider = new BrowserProvider(ethereum);
-    const signer = await provider.getSigner();
-    return new Contract(contractAddress, contractABI, signer);
-  };
+  // Persist state
+  useEffect(() => {
+    saveUsers(users);
+  }, [users]);
 
-  // Build a hash of off-chain metadata (stored as metaHash on-chain)
-  const buildMetaHash = () => {
-    const meta = {
-      name: productForm.name,
-      description: productForm.description,
-      batchId: productForm.batchId
-    };
-    const json = JSON.stringify(meta);
-    const bytes = toUtf8Bytes(json);
-    return keccak256(bytes);
-  };
+  useEffect(() => {
+    saveProducts(products);
+  }, [products]);
 
-  const formatTimestamp = (ts) => {
-    if (!ts) return "";
-    const num = Number(ts);
-    const date = new Date(num * 1000);
-    if (Number.isNaN(date.getTime())) return ts;
-    return date.toLocaleString();
-  };
+  // Load contract address from localStorage when chain changes
+  useEffect(() => {
+    const effectiveChain = chainId || DEFAULT_CHAIN_ID;
+    const addr = loadContractAddress(effectiveChain);
+    setContractAddress(addr || null);
+  }, [chainId]);
 
-  const weiFromEth = (ethString) => {
-    const cleaned = ethString && ethString.trim() !== "" ? ethString : "0";
-    return parseEther(cleaned); // returns bigint internally, that's fine
-  };
-
-  // ---------- MetaMask setup ----------
-
+  // MetaMask listeners (no forced connect)
   useEffect(() => {
     const ethereum = getEthereum();
     if (ethereum) {
@@ -85,24 +92,29 @@ function App() {
       ethereum
         .request({ method: "eth_accounts" })
         .then((accounts) => {
-          if (accounts.length > 0) {
-            setAccount(accounts[0]);
-          }
+          if (accounts.length > 0) setAccount(accounts[0]);
         })
-        .catch(console.error);
+        .catch(() => {});
 
       ethereum
         .request({ method: "eth_chainId" })
         .then((id) => setChainId(id))
-        .catch(console.error);
+        .catch(() => {});
 
-      ethereum.on("accountsChanged", (accounts) => {
+      const handleAccountsChanged = (accounts) => {
         setAccount(accounts[0] || null);
-      });
-
-      ethereum.on("chainChanged", (id) => {
+      };
+      const handleChainChanged = (id) => {
         setChainId(id);
-      });
+      };
+
+      ethereum.on("accountsChanged", handleAccountsChanged);
+      ethereum.on("chainChanged", handleChainChanged);
+
+      return () => {
+        ethereum.removeListener("accountsChanged", handleAccountsChanged);
+        ethereum.removeListener("chainChanged", handleChainChanged);
+      };
     } else {
       setHasMetaMask(false);
     }
@@ -114,162 +126,596 @@ function App() {
       setStatus("MetaMask not detected. Please install the extension.");
       return;
     }
-
     try {
       const accounts = await ethereum.request({
         method: "eth_requestAccounts"
       });
       setAccount(accounts[0]);
+      const id = await ethereum.request({ method: "eth_chainId" });
+      setChainId(id);
       setStatus("Connected to MetaMask");
     } catch (err) {
       console.error(err);
-      setStatus("User rejected connection request.");
+      setStatus("User rejected MetaMask connection.");
     }
   };
 
-  // ---------- Contract interactions ----------
+  const disconnectWallet = async () => {
+    const ethereum = getEthereum();
+    if (ethereum && account) {
+      try {
+        await ethereum.request({
+          method: "wallet_revokePermissions",
+          params: [{ eth_accounts: {} }]
+        });
+      } catch {
+        // ignore
+      }
+    }
+    setAccount(null);
+    setChainId(null);
+    setStatus("Disconnected from MetaMask in this app.");
+  };
 
-  const handleRegisterProduct = async (e) => {
-    e.preventDefault();
-    if (!account) {
-      setStatus("Connect your wallet first.");
+  const handleSaveContractAddress = (addr) => {
+    const effectiveChain = chainId || DEFAULT_CHAIN_ID;
+    saveContractAddress(effectiveChain, addr);
+    setContractAddress(addr);
+    setStatus(
+      `Contract address saved for network ${effectiveChain}. Future on-chain actions will use this address.`
+    );
+  };
+
+  // ------------------------ Auth ------------------------
+
+  const handleLogin = (username, password) => {
+    const user = users.find(
+      (u) => u.username === username && u.password === password
+    );
+    if (!user) {
+      setStatus("Invalid username or password.");
+      return false;
+    }
+    if (!ROLES.includes(user.role)) {
+      setStatus("User has invalid role.");
+      return false;
+    }
+    setCurrentUser(user);
+    setActiveView(user.role);
+    setStatus(`Logged in as ${user.username} (${user.role}).`);
+    return true;
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setActiveView("login");
+    setStatus("");
+  };
+
+  // ------------------------ Admin user management ------------------------
+
+  const handleCreateUser = (newUser) => {
+    if (!currentUser || currentUser.role !== "admin") return;
+
+    const { username, password, role } = newUser;
+
+    if (!username || !password || !role) {
+      setStatus("Username, password, and role are required.");
+      return;
+    }
+    if (!ROLES.includes(role) || role === "admin") {
+      setStatus("Role must be producer, supplier, or consumer.");
+      return;
+    }
+    if (users.some((u) => u.username === username)) {
+      setStatus("Username already exists.");
+      return;
+    }
+
+    // Always create a new Sepolia keypair for the user
+    const wallet = Wallet.createRandom();
+    const ethAddress = wallet.address;
+    const privateKey = wallet.privateKey;
+
+    const user = {
+      id: "u-" + Date.now().toString(),
+      username,
+      password,
+      role,
+      ethAddress,
+      privateKey
+    };
+
+    setUsers((prev) => [...prev, user]);
+    setStatus(`User '${username}' created successfully with ETH address.`);
+  };
+
+  const handleDeleteUser = (userId) => {
+    if (!currentUser || currentUser.role !== "admin") return;
+    const user = users.find((u) => u.id === userId);
+    if (!user) return;
+    if (user.username === "admin") {
+      setStatus("Cannot delete the default admin user.");
+      return;
+    }
+    setUsers((prev) => prev.filter((u) => u.id !== userId));
+    setStatus(`User '${user.username}' deleted.`);
+  };
+
+  // ✅ NEW: allow changing admin ETH address from UI
+  const handleUpdateAdminEthAddress = (newAddress) => {
+    if (!isAddress(newAddress)) {
+      setStatus("Admin ETH address must be a valid Ethereum address.");
+      return;
+    }
+
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.username === "admin"
+          ? { ...u, ethAddress: newAddress, privateKey: "" } // we don't know the private key
+          : u
+      )
+    );
+
+    setCurrentUser((prev) =>
+      prev && prev.username === "admin"
+        ? { ...prev, ethAddress: newAddress, privateKey: "" }
+        : prev
+    );
+
+    setStatus(`Admin ETH address updated to ${newAddress}.`);
+  };
+
+  // ------------------------ Producer product management ------------------------
+
+  const handleAddPendingProduct = (input) => {
+    if (!currentUser || currentUser.role !== "producer") return;
+
+    const qtyNum = Number(input.quantity || "0");
+    if (!input.name || !input.price || !Number.isFinite(qtyNum) || qtyNum <= 0) {
+      setStatus("Name, price, and positive quantity are required.");
+      return;
+    }
+
+    const nextTempId =
+      products.reduce(
+        (max, p) => Math.max(max, p.tempId != null ? p.tempId : 0),
+        0
+      ) + 1;
+
+    const product = {
+      localId: "p-" + Date.now().toString(),
+      onChainId: null,
+      tempId: nextTempId,
+      name: input.name,
+      price: input.price,
+      quantity: qtyNum,
+      ownerUsername: currentUser.username,
+      ownerRole: "producer",
+      status: "pending",
+      metaHash: null,
+      lastTxHash: null
+    };
+
+    setProducts((prev) => [...prev, product]);
+    setStatus(
+      `Product '${product.name}' added to pending list with id #${nextTempId}.`
+    );
+  };
+
+  const handleDeletePendingProduct = (localId) => {
+    if (!currentUser) return;
+    setProducts((prev) =>
+      prev.filter((p) => !(p.localId === localId && p.status === "pending"))
+    );
+    setStatus("Pending product removed.");
+  };
+
+  const handleApprovePendingProduct = async (product) => {
+    if (!currentUser || currentUser.role !== "producer") return;
+    if (!product || product.status !== "pending") return;
+
+    try {
+      setIsLoading(true);
+      setStatus("Sending registerProduct transaction via MetaMask...");
+
+      const { contract, signerAddress, chainId: chain } =
+        await getProductsChainContract(setStatus);
+      setAccount(signerAddress);
+      setChainId(chain);
+
+      const metaHash = buildProductMetaHash(product, currentUser);
+      const priceWei = parseEther(product.price || "0");
+      const qtyStr = String(product.quantity);
+
+      const tx = await contract.registerProduct(metaHash, priceWei, qtyStr);
+      setStatus(`Tx sent: ${tx.hash}. Waiting for confirmation...`);
+      const receipt = await tx.wait();
+
+      let productId = null;
+
+      try {
+        for (const log of receipt.logs) {
+          try {
+            const parsed = contract.interface.parseLog(log);
+            if (parsed && parsed.name === "ProductRegistered") {
+              productId = Number(parsed.args.id.toString());
+              break;
+            }
+          } catch {
+            // ignore
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      if (!productId) {
+        try {
+          const nextId = await contract.nextProductId();
+          productId = Number(nextId.toString());
+        } catch {
+          // ignore
+        }
+      }
+
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.localId === product.localId
+            ? {
+                ...p,
+                status: "approved",
+                onChainId: productId != null ? productId : p.onChainId,
+                metaHash,
+                lastTxHash: tx.hash
+              }
+            : p
+        )
+      );
+
+      setStatus(
+        `Product approved on-chain${
+          productId ? ` with id #${productId}` : ""
+        }. Tx: ${tx.hash}`
+      );
+    } catch (err) {
+      console.error(err);
+      if (
+        err.message === "wrong-network" ||
+        err.message === "no-contract" ||
+        err.message === "no-metamask" ||
+        err.message === "bad-address"
+      ) {
+        return; // friendly message already set
+      }
+      setStatus(
+        "Error while approving product: " +
+          (err.reason || err.message || "unknown error")
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ------------------------ Supplier actions ------------------------
+
+  const handleSupplierApprove = async (product) => {
+    if (!currentUser || currentUser.role !== "supplier") return;
+    if (!product.onChainId) {
+      setStatus("This product has not been published on chain yet.");
       return;
     }
 
     try {
       setIsLoading(true);
-      setStatus("Preparing transaction...");
+      setStatus("Sending transferProduct (to supplier) via MetaMask...");
 
-      const metaHash = buildMetaHash();
-      const priceWei = weiFromEth(productForm.priceEth);
+      const { contract, signerAddress, chainId: chain } =
+        await getProductsChainContract(setStatus);
+      setAccount(signerAddress);
+      setChainId(chain);
 
-      // validate quantity using normal numbers
-      const qtyStr = productForm.qty || "0";
-      const qtyNum = Number(qtyStr);
+      const tx = await contract.transferProduct(
+        product.onChainId,
+        signerAddress,
+        "TO_SUPPLIER"
+      );
+      setStatus(`Tx sent: ${tx.hash}. Waiting for confirmation...`);
+      await tx.wait();
 
-      if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
-        setStatus("Quantity must be > 0");
-        setIsLoading(false);
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.localId === product.localId
+            ? {
+                ...p,
+                ownerRole: "supplier",
+                ownerUsername: currentUser.username,
+                status: "withSupplier",
+                lastTxHash: tx.hash
+              }
+            : p
+        )
+      );
+
+      setStatus("Product transferred to supplier on-chain. Tx: " + tx.hash);
+    } catch (err) {
+      console.error(err);
+      if (
+        err.message === "wrong-network" ||
+        err.message === "no-contract" ||
+        err.message === "no-metamask" ||
+        err.message === "bad-address"
+      ) {
         return;
       }
-
-      // pass qty as string (ethers will convert to uint256)
-      const qty = qtyStr;
-
-      const contract = await getContract();
-
-      const tx = await contract.addProduct(metaHash, priceWei, qty);
-      setStatus(`Submitted tx: ${tx.hash}. Waiting for confirmation...`);
-
-      const receipt = await tx.wait();
-      setStatus(`Transaction confirmed in block ${receipt.blockNumber}.`);
-
-      // Attempt to parse ProductAdded event to get the new product ID
-      const event = receipt.logs
-        .map((log) => {
-          try {
-            return contract.interface.parseLog(log);
-          } catch {
-            return null;
-          }
-        })
-        .find((parsed) => parsed && parsed.name === "ProductAdded");
-
-      if (event) {
-        const id = event.args.id.toString();
-        setStatus(
-          `Product registered successfully with on-chain ID: ${id}. Tx: ${tx.hash}`
-        );
-      }
-
-      // Reset form
-      setProductForm({
-        name: "",
-        description: "",
-        batchId: "",
-        priceEth: "",
-        qty: ""
-      });
-    } catch (err) {
-      console.error(err);
-      setStatus(`Error: ${err.message ?? "Transaction failed"}`);
+      setStatus(
+        "Error while transferring to supplier: " +
+          (err.reason || err.message || "unknown error")
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleViewProduct = async (e) => {
-    e.preventDefault();
-    if (!viewId) {
-      setStatus("Enter a product ID to view.");
+  // ------------------------ Consumer actions ------------------------
+
+  const handleConsumerApprove = async (product) => {
+    if (!currentUser || currentUser.role !== "consumer") return;
+    if (!product.onChainId) {
+      setStatus("This product has not been published on chain yet.");
       return;
     }
 
     try {
       setIsLoading(true);
-      setStatus("Loading product from blockchain...");
+      setStatus("Sending transferProduct (to consumer) via MetaMask...");
 
-      const contract = await getContract();
-      const product = await contract.getProduct(viewId);
+      const { contract, signerAddress, chainId: chain } =
+        await getProductsChainContract(setStatus);
+      setAccount(signerAddress);
+      setChainId(chain);
 
-      setProductInfo({
-        id: product.id.toString(),
-        owner: product.owner,
-        supplier: product.supplier,
-        consumer: product.consumer,
-        ownertx: product.ownertx,
-        suppliertx: product.suppliertx,
-        metaHash: product.metaHash,
-        priceWei: product.price.toString(),
-        priceEth: formatEther(product.price),
-        qty: product.qty.toString(),
-        approved: product.approved,
-        createdAt: product.createdAt.toString(),
-        updatedAt: product.updatedAt.toString()
-      });
+      const tx = await contract.transferProduct(
+        product.onChainId,
+        signerAddress,
+        "TO_CONSUMER"
+      );
+      setStatus(`Tx sent: ${tx.hash}. Waiting for confirmation...`);
+      await tx.wait();
 
-      setStatus("Product loaded.");
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.localId === product.localId
+            ? {
+                ...p,
+                ownerRole: "consumer",
+                ownerUsername: currentUser.username,
+                status: "withConsumer",
+                lastTxHash: tx.hash
+              }
+            : p
+        )
+      );
+
+      setStatus("Product transferred to consumer on-chain. Tx: " + tx.hash);
     } catch (err) {
       console.error(err);
-      setStatus(`Error: ${err.message ?? "Failed to load product"}`);
-      setProductInfo(null);
+      if (
+        err.message === "wrong-network" ||
+        err.message === "no-contract" ||
+        err.message === "no-metamask" ||
+        err.message === "bad-address"
+      ) {
+        return;
+      }
+      setStatus(
+        "Error while transferring to consumer: " +
+          (err.reason || err.message || "unknown error")
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ---------- Render ----------
+  const handleViewHistory = async (product, setHistoryRecords) => {
+    if (!product.onChainId) {
+      setStatus("Product has no on-chain id yet.");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setStatus("Loading on-chain history...");
+
+      const { contract, signerAddress, chainId: chain } =
+        await getProductsChainContract(setStatus);
+      setAccount(signerAddress);
+      setChainId(chain);
+
+      const records = await contract.getProductHistory(product.onChainId);
+      setHistoryRecords(records);
+      setStatus("History loaded from blockchain.");
+    } catch (err) {
+      console.error(err);
+      if (
+        err.message === "wrong-network" ||
+        err.message === "no-contract" ||
+        err.message === "no-metamask" ||
+        err.message === "bad-address"
+      ) {
+        return;
+      }
+      setStatus(
+        "Error while loading history: " +
+          (err.reason || err.message || "unknown error")
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ------------------------ Render ------------------------
+
+  if (!currentUser) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          fontFamily:
+            "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+          background: "#0f172a",
+          color: "#f9fafb",
+          padding: "2rem"
+        }}
+      >
+        <div style={{ maxWidth: "480px", margin: "0 auto" }}>
+          <LoginScreen onLogin={handleLogin} status={status} />
+        </div>
+      </div>
+    );
+  }
+
+  const headerRight = (
+    <div style={{ textAlign: "right" }}>
+      {!hasMetaMask && (
+        <p style={{ color: "#f97373", marginBottom: "0.5rem" }}>
+          MetaMask not detected
+        </p>
+      )}
+
+      {account ? (
+        <>
+          <div
+            style={{
+              fontSize: "0.85rem",
+              color: "#cbd5f5",
+              marginBottom: "0.25rem"
+            }}
+          >
+            MetaMask account:
+          </div>
+          <div
+            style={{
+              padding: "0.35rem 0.75rem",
+              background: "#1f2937",
+              borderRadius: "999px",
+              fontSize: "0.8rem",
+              wordBreak: "break-all",
+              marginBottom: "0.4rem"
+            }}
+          >
+            {account}
+          </div>
+          {chainId && (
+            <div style={{ marginBottom: "0.5rem", fontSize: "0.75rem" }}>
+              Chain ID: {chainId}{" "}
+              <span style={{ opacity: 0.7 }}>(Sepolia = 0xaa36a7)</span>
+            </div>
+          )}
+
+          <button
+            onClick={disconnectWallet}
+            style={{
+              background: "#1f2937",
+              color: "#e5e7eb",
+              border: "none",
+              padding: "0.45rem 0.9rem",
+              borderRadius: "999px",
+              cursor: "pointer",
+              fontSize: "0.8rem",
+              marginBottom: "0.5rem"
+            }}
+          >
+            Disconnect MetaMask
+          </button>
+        </>
+      ) : (
+        <button
+          onClick={connectWallet}
+          style={{
+            background: "#4f46e5",
+            color: "#f9fafb",
+            border: "none",
+            padding: "0.6rem 1.2rem",
+            borderRadius: "999px",
+            cursor: "pointer",
+            fontWeight: 600,
+            fontSize: "0.9rem",
+            marginBottom: "0.5rem"
+          }}
+        >
+          Connect MetaMask
+        </button>
+      )}
+
+      <div style={{ marginTop: "0.5rem" }}>
+        <div
+          style={{
+            fontSize: "0.75rem",
+            marginBottom: "0.25rem",
+            color: "#cbd5f5"
+          }}
+        >
+          Contract:{" "}
+          <span style={{ fontFamily: "monospace" }}>
+            {contractAddress || "not set"}
+          </span>
+        </div>
+        <button
+          onClick={() => setShowContractModal(true)}
+          style={{
+            background: "#111827",
+            color: "#e5e7eb",
+            border: "none",
+            padding: "0.4rem 0.9rem",
+            borderRadius: "999px",
+            cursor: "pointer",
+            fontSize: "0.8rem"
+          }}
+        >
+          Set contract
+        </button>
+      </div>
+    </div>
+  );
+
+  const userEth = currentUser.ethAddress || "not assigned";
+
+  const userEthMismatch =
+    account &&
+    currentUser.ethAddress &&
+    account.toLowerCase() !== currentUser.ethAddress.toLowerCase();
 
   return (
     <div
       style={{
         minHeight: "100vh",
-        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-        background: "#0f172a",
+        fontFamily:
+          "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+        background: "#020617",
         color: "#f9fafb",
         padding: "2rem"
       }}
     >
       <div
         style={{
-          maxWidth: "960px",
+          maxWidth: "1120px",
           margin: "0 auto",
           display: "grid",
           gap: "1.5rem"
         }}
       >
-        {/* Header */}
         <header
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            marginBottom: "1rem"
+            marginBottom: "0.5rem"
           }}
         >
           <div>
-            <h1 style={{ margin: 0, fontSize: "1.75rem" }}>
-              Supply Chain Transparency DApp
+            <h1 style={{ margin: 0, fontSize: "1.7rem" }}>
+              Supply Chain Tracking App
             </h1>
             <p
               style={{
@@ -278,77 +724,79 @@ function App() {
                 color: "#cbd5f5"
               }}
             >
-              ICS 440 – Products tracking via Ethereum & MetaMask
+              Role: <strong>{currentUser.role}</strong>{" "}
+              <span style={{ opacity: 0.8 }}>
+                — Welcome, {currentUser.username}.
+              </span>
+            </p>
+            <p
+              style={{
+                margin: 0,
+                marginTop: "0.25rem",
+                fontSize: "0.8rem",
+                color: "#9ca3af"
+              }}
+            >
+              User ETH address:&nbsp;
+              <span style={{ fontFamily: "monospace" }}>{userEth}</span>
+              {userEthMismatch && (
+                <span style={{ color: "#f97373", marginLeft: "0.25rem" }}>
+                  (⚠ MetaMask account is different)
+                </span>
+              )}
             </p>
           </div>
 
-          <div style={{ textAlign: "right" }}>
-            {!hasMetaMask && (
-              <p style={{ color: "#f97373", marginBottom: "0.5rem" }}>
-                MetaMask not detected
-              </p>
-            )}
-
-            {account ? (
-              <>
-                <div
-                  style={{
-                    fontSize: "0.85rem",
-                    color: "#cbd5f5",
-                    marginBottom: "0.25rem"
-                  }}
-                >
-                  Connected:
-                </div>
-                <div
-                  style={{
-                    padding: "0.35rem 0.75rem",
-                    background: "#1f2937",
-                    borderRadius: "999px",
-                    fontSize: "0.8rem",
-                    wordBreak: "break-all"
-                  }}
-                >
-                  {account}
-                </div>
-                {chainId && (
-                  <div
-                    style={{ marginTop: "0.25rem", fontSize: "0.75rem" }}
-                  >
-                    Chain ID: {chainId}{" "}
-                    <span style={{ opacity: 0.7 }}>
-                      (Sepolia = 0xaa36a7)
-                    </span>
-                  </div>
-                )}
-              </>
-            ) : (
-              <button
-                onClick={connectWallet}
-                style={{
-                  background: "#4f46e5",
-                  color: "#f9fafb",
-                  border: "none",
-                  padding: "0.6rem 1.2rem",
-                  borderRadius: "999px",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                  fontSize: "0.9rem"
-                }}
-              >
-                Connect MetaMask
-              </button>
-            )}
-          </div>
+          {headerRight}
         </header>
 
-        {/* Status bar */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginBottom: "0.25rem"
+          }}
+        >
+          <div />
+          <div>
+            <button
+              onClick={() => setActiveView(currentUser.role)}
+              style={{
+                marginRight: "0.75rem",
+                background: "#1f2937",
+                color: "#e5e7eb",
+                border: "none",
+                padding: "0.45rem 0.9rem",
+                borderRadius: "999px",
+                cursor: "pointer",
+                fontSize: "0.8rem"
+              }}
+            >
+              Home
+            </button>
+            <button
+              onClick={handleLogout}
+              style={{
+                background: "#ef4444",
+                color: "#f9fafb",
+                border: "none",
+                padding: "0.45rem 0.9rem",
+                borderRadius: "999px",
+                cursor: "pointer",
+                fontSize: "0.8rem"
+              }}
+            >
+              Log out
+            </button>
+          </div>
+        </div>
+
         {status && (
           <div
             style={{
               padding: "0.75rem 1rem",
               borderRadius: "0.75rem",
-              background: "#111827",
+              background: "#020617",
               border: "1px solid #1f2937",
               fontSize: "0.85rem"
             }}
@@ -358,313 +806,218 @@ function App() {
           </div>
         )}
 
-        {/* Layout: left = register, right = view */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr)",
-            gap: "1.5rem"
-          }}
-        >
-          {/* Card: Register Product */}
-          <section
-            style={{
-              background: "#020617",
-              borderRadius: "1rem",
-              padding: "1.25rem 1.25rem 1.5rem",
-              border: "1px solid #1e293b",
-              boxShadow: "0 15px 30px rgba(0,0,0,0.35)"
-            }}
-          >
-            <h2
-              style={{
-                marginTop: 0,
-                marginBottom: "0.75rem",
-                fontSize: "1.15rem"
-              }}
-            >
-              Register Product (Producer)
-            </h2>
-            <p
-              style={{
-                marginTop: 0,
-                marginBottom: "1rem",
-                fontSize: "0.85rem",
-                color: "#e5e7eb"
-              }}
-            >
-              This hashes the product details and stores only the hash, price
-              (wei), and quantity on-chain.
-            </p>
+        {activeView === "admin" && (
+          <AdminDashboard
+            users={users}
+            onCreateUser={handleCreateUser}
+            onDeleteUser={handleDeleteUser}
+            onUpdateAdminEthAddress={handleUpdateAdminEthAddress}
+          />
+        )}
 
-            <form onSubmit={handleRegisterProduct}>
-              <label style={labelStyle}>
-                Product Name
-                <input
-                  style={inputStyle}
-                  value={productForm.name}
-                  onChange={(e) =>
-                    setProductForm({
-                      ...productForm,
-                      name: e.target.value
-                    })
-                  }
-                  required
-                />
-              </label>
+        {activeView === "producer" && (
+          <ProducerDashboard
+            products={products}
+            currentUser={currentUser}
+            onAddPending={handleAddPendingProduct}
+            onDeletePending={handleDeletePendingProduct}
+            onApprovePending={handleApprovePendingProduct}
+          />
+        )}
 
-              <label style={labelStyle}>
-                Description
-                <textarea
-                  style={{ ...inputStyle, minHeight: "70px", resize: "vertical" }}
-                  value={productForm.description}
-                  onChange={(e) =>
-                    setProductForm({
-                      ...productForm,
-                      description: e.target.value
-                    })
-                  }
-                  required
-                />
-              </label>
+        {activeView === "supplier" && (
+          <SupplierDashboard
+            products={products}
+            currentUser={currentUser}
+            onApprove={handleSupplierApprove}
+          />
+        )}
 
-              <label style={labelStyle}>
-                Batch ID / Internal ID
-                <input
-                  style={inputStyle}
-                  value={productForm.batchId}
-                  onChange={(e) =>
-                    setProductForm({
-                      ...productForm,
-                      batchId: e.target.value
-                    })
-                  }
-                  required
-                />
-              </label>
+        {activeView === "consumer" && (
+          <ConsumerDashboard
+            products={products}
+            currentUser={currentUser}
+            onApprove={handleConsumerApprove}
+            onViewHistory={handleViewHistory}
+          />
+        )}
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "0.75rem"
-                }}
-              >
-                <label style={labelStyle}>
-                  Price (ETH)
-                  <input
-                    style={inputStyle}
-                    type="number"
-                    min="0"
-                    step="0.000000000000000001"
-                    value={productForm.priceEth}
-                    onChange={(e) =>
-                      setProductForm({
-                        ...productForm,
-                        priceEth: e.target.value
-                      })
-                    }
-                    required
-                  />
-                </label>
-
-                <label style={labelStyle}>
-                  Quantity
-                  <input
-                    style={inputStyle}
-                    type="number"
-                    min="1"
-                    value={productForm.qty}
-                    onChange={(e) =>
-                      setProductForm({
-                        ...productForm,
-                        qty: e.target.value
-                      })
-                    }
-                    required
-                  />
-                </label>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading || !account}
-                style={{
-                  marginTop: "1rem",
-                  background: isLoading ? "#4b5563" : "#22c55e",
-                  color: "#020617",
-                  border: "none",
-                  padding: "0.75rem 1.2rem",
-                  borderRadius: "0.75rem",
-                  cursor: isLoading || !account ? "not-allowed" : "pointer",
-                  fontWeight: 600,
-                  fontSize: "0.95rem",
-                  width: "100%"
-                }}
-              >
-                {isLoading ? "Processing..." : "Register Product On-chain"}
-              </button>
-
-              {!account && (
-                <p
-                  style={{
-                    marginTop: "0.5rem",
-                    fontSize: "0.8rem",
-                    color: "#f87171"
-                  }}
-                >
-                  Connect MetaMask to register products.
-                </p>
-              )}
-            </form>
-          </section>
-
-          {/* Card: View Product */}
-          <section
-            style={{
-              background: "#020617",
-              borderRadius: "1rem",
-              padding: "1.25rem 1.25rem 1.5rem",
-              border: "1px solid #1e293b",
-              boxShadow: "0 15px 30px rgba(0,0,0,0.35)"
-            }}
-          >
-            <h2
-              style={{
-                marginTop: 0,
-                marginBottom: "0.75rem",
-                fontSize: "1.15rem"
-              }}
-            >
-              View Product by ID
-            </h2>
-            <p
-              style={{
-                marginTop: 0,
-                marginBottom: "1rem",
-                fontSize: "0.85rem",
-                color: "#e5e7eb"
-              }}
-            >
-              Consumers and suppliers can verify the on-chain product info here.
-            </p>
-
-            <form onSubmit={handleViewProduct} style={{ marginBottom: "1rem" }}>
-              <label style={labelStyle}>
-                Product ID
-                <input
-                  style={inputStyle}
-                  type="number"
-                  min="1"
-                  value={viewId}
-                  onChange={(e) => setViewId(e.target.value)}
-                  required
-                />
-              </label>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                style={{
-                  marginTop: "0.75rem",
-                  background: "#38bdf8",
-                  color: "#020617",
-                  border: "none",
-                  padding: "0.65rem 1rem",
-                  borderRadius: "0.75rem",
-                  cursor: isLoading ? "not-allowed" : "pointer",
-                  fontWeight: 600,
-                  fontSize: "0.9rem",
-                  width: "100%"
-                }}
-              >
-                {isLoading ? "Loading..." : "Load Product"}
-              </button>
-            </form>
-
-            {productInfo && (
-              <div
-                style={{
-                  fontSize: "0.85rem",
-                  background: "#020617",
-                  borderRadius: "0.75rem",
-                  border: "1px solid #1f2937",
-                  padding: "0.75rem"
-                }}
-              >
-                <p>
-                  <strong>ID:</strong> {productInfo.id}
-                </p>
-                <p>
-                  <strong>Owner (Producer):</strong> {productInfo.owner}
-                </p>
-                <p>
-                  <strong>Supplier:</strong> {productInfo.supplier}
-                </p>
-                <p>
-                  <strong>Consumer:</strong> {productInfo.consumer}
-                </p>
-
-                <p>
-                  <strong>Meta Hash:</strong> {productInfo.metaHash}
-                </p>
-                <p>
-                  <strong>Price:</strong> {productInfo.priceEth} ETH (
-                  {productInfo.priceWei} wei)
-                </p>
-                <p>
-                  <strong>Quantity:</strong> {productInfo.qty}
-                </p>
-                <p>
-                  <strong>Approved:</strong> {productInfo.approved ? "Yes" : "No"}
-                </p>
-                <p>
-                  <strong>Created At:</strong>{" "}
-                  {formatTimestamp(productInfo.createdAt)}
-                </p>
-                <p>
-                  <strong>Updated At:</strong>{" "}
-                  {formatTimestamp(productInfo.updatedAt)}
-                </p>
-              </div>
-            )}
-          </section>
-        </div>
-
-        {/* Footer */}
-        <footer
-          style={{
-            marginTop: "1rem",
-            fontSize: "0.75rem",
-            color: "#9ca3af",
-            textAlign: "center"
-          }}
-        >
-          Later you can add a QR scanner that fills the Product ID field to
-          match the optional QR feature in your project.
-        </footer>
+        <ContractModal
+          isOpen={showContractModal}
+          onClose={() => setShowContractModal(false)}
+          onSave={handleSaveContractAddress}
+          chainId={chainId || DEFAULT_CHAIN_ID}
+          currentAddress={contractAddress || ""}
+        />
       </div>
     </div>
   );
 }
 
-const labelStyle = {
-  display: "block",
-  marginBottom: "0.5rem",
-  fontSize: "0.8rem",
-  fontWeight: 500
-};
+// ------------------------ Contract address modal ------------------------
 
-const inputStyle = {
-  width: "100%",
-  marginTop: "0.25rem",
-  padding: "0.5rem 0.6rem",
-  borderRadius: "0.6rem",
-  border: "1px solid #374151",
-  background: "#020617",
-  color: "#f9fafb",
-  fontSize: "0.85rem",
-  outline: "none"
-};
+function ContractModal({
+  isOpen,
+  onClose,
+  onSave,
+  chainId,
+  currentAddress
+}) {
+  const [address, setAddress] = useState(currentAddress || "");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      setAddress(currentAddress || "");
+      setError("");
+    }
+  }, [isOpen, currentAddress]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const trimmed = address.trim();
+    if (!isAddress(trimmed)) {
+      setError("Please enter a valid Ethereum address (0x + 40 hex chars).");
+      return;
+    }
+    onSave(trimmed);
+    onClose();
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15,23,42,0.85)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 50
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "480px",
+          background: "#020617",
+          borderRadius: "1rem",
+          border: "1px solid #1e293b",
+          padding: "1.5rem"
+        }}
+      >
+        <h2 style={{ marginTop: 0, marginBottom: "0.75rem" }}>
+          Set ProductsChain Address
+        </h2>
+        <p
+          style={{
+            marginTop: 0,
+            marginBottom: "0.75rem",
+            fontSize: "0.85rem",
+            color: "#e5e7eb"
+          }}
+        >
+          Paste the deployed <strong>ProductsChain</strong> contract address for
+          this network.
+        </p>
+        <p
+          style={{
+            marginTop: 0,
+            marginBottom: "0.75rem",
+            fontSize: "0.8rem",
+            color: "#9ca3af"
+          }}
+        >
+          Network chainId: <code>{chainId}</code> (Sepolia is{" "}
+          <code>0xaa36a7</code>). This address is stored only in your browser.
+        </p>
+
+        <form onSubmit={handleSubmit}>
+          <label
+            style={{
+              display: "block",
+              marginBottom: "0.5rem",
+              fontSize: "0.8rem",
+              fontWeight: 500
+            }}
+          >
+            Contract address
+            <input
+              style={{
+                width: "100%",
+                marginTop: "0.25rem",
+                padding: "0.5rem 0.6rem",
+                borderRadius: "0.6rem",
+                border: "1px solid #374151",
+                background: "#020617",
+                color: "#f9fafb",
+                fontSize: "0.85rem",
+                outline: "none"
+              }}
+              placeholder="0x..."
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              required
+            />
+          </label>
+
+          {error && (
+            <div
+              style={{
+                marginBottom: "0.75rem",
+                fontSize: "0.8rem",
+                color: "#f97373"
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "0.5rem",
+              marginTop: "0.75rem"
+            }}
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                background: "#111827",
+                color: "#e5e7eb",
+                border: "none",
+                padding: "0.5rem 0.9rem",
+                borderRadius: "0.75rem",
+                cursor: "pointer",
+                fontSize: "0.8rem"
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{
+                background: "linear-gradient(to right, #22c55e, #38bdf8)",
+                color: "#020617",
+                border: "none",
+                padding: "0.5rem 0.9rem",
+                borderRadius: "0.75rem",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: 600
+              }}
+            >
+              Save address
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 export default App;
