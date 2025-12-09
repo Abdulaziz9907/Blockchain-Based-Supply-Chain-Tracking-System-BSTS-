@@ -38,15 +38,27 @@ function App() {
   const [contractAddress, setContractAddress] = useState(null);
   const [showContractModal, setShowContractModal] = useState(false);
 
-  // Remove white body margin + set global background
+  // Remove white body margin + set global background + inject spinner keyframes
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.body.style.margin = "0";
       document.body.style.backgroundColor = "#020617";
+
+      // Inject spinner keyframes once
+      const styleEl = document.createElement("style");
+      styleEl.innerHTML = `
+        @keyframes sc-spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `;
+      document.head.appendChild(styleEl);
+
+      return () => {
+        document.head.removeChild(styleEl);
+      };
     }
   }, []);
-
-  // (Removed) auto-ETH keypair creation for admin user
 
   // Persist state
   useEffect(() => {
@@ -114,7 +126,7 @@ function App() {
       setAccount(accounts[0]);
       const id = await ethereum.request({ method: "eth_chainId" });
       setChainId(id);
-      setStatus("Connected to MetaMask");
+      setStatus("Connected to MetaMask.");
     } catch (err) {
       console.error(err);
       setStatus("User rejected MetaMask connection.");
@@ -138,7 +150,13 @@ function App() {
     setStatus("Disconnected from MetaMask in this app.");
   };
 
+  // 🔒 Only admin can set/update the contract address
   const handleSaveContractAddress = (addr) => {
+    if (!currentUser || currentUser.role !== "admin") {
+      setStatus("Only the admin can update the contract address.");
+      return;
+    }
+
     const effectiveChain = chainId || DEFAULT_CHAIN_ID;
     saveContractAddress(effectiveChain, addr);
     setContractAddress(addr);
@@ -163,7 +181,8 @@ function App() {
     }
     setCurrentUser(user);
     setActiveView(user.role);
-    setStatus(`Logged in as ${user.username} (${user.role}).`);
+    // Do NOT show "Logged in as ..." notification anymore
+    setStatus("");
     return true;
   };
 
@@ -220,11 +239,10 @@ function App() {
       return;
     }
     setUsers((prev) => prev.filter((u) => u.id !== userId));
-    setStatus(`User '${user.username}' deleted.`);
+    setStatus(`User '${user.username}' deleted successfully.`);
   };
 
-  // ✅ This still exists but is now effectively unused,
-  // and admin doesn't get/need an ETH address in the UI.
+  // ✅ Admin ETH address update (still present but optional)
   const handleUpdateAdminEthAddress = (newAddress) => {
     if (!isAddress(newAddress)) {
       setStatus("Admin ETH address must be a valid Ethereum address.");
@@ -290,7 +308,8 @@ function App() {
     setProducts((prev) =>
       prev.filter((p) => !(p.localId === localId && p.status === "pending"))
     );
-    setStatus("Pending product removed.");
+    // Better, styled notification (will be treated as success)
+    setStatus("Pending product removed successfully.");
   };
 
   const handleApprovePendingProduct = async (product) => {
@@ -536,6 +555,71 @@ function App() {
     }
   };
 
+  // ------------------------ Notification helpers ------------------------
+
+  const getStatusVariant = () => {
+    if (!status) return null;
+    if (isLoading) return "loading";
+
+    const s = status.toLowerCase();
+
+    if (
+      s.includes("error") ||
+      s.includes("invalid") ||
+      s.includes("cannot") ||
+      s.includes("rejected") ||
+      s.includes("not detected")
+    ) {
+      return "error";
+    }
+
+    if (
+      s.includes("success") ||
+      s.includes("created") ||
+      s.includes("saved") ||
+      s.includes("approved") ||
+      s.includes("transferred") ||
+      s.includes("logged in") ||
+      s.includes("connected") ||
+      s.includes("removed") ||
+      s.includes("deleted")
+    ) {
+      return "success";
+    }
+
+    return "info";
+  };
+
+  const getStatusColors = (variant) => {
+    switch (variant) {
+      case "loading":
+        return {
+          bg: "#0b1120",
+          border: "#38bdf8",
+          text: "#e0f2fe"
+        };
+      case "error":
+        return {
+          bg: "#111827",
+          border: "#b91c1c",
+          text: "#fecaca"
+        };
+      case "success":
+        return {
+          bg: "#022c22",
+          border: "#16a34a",
+          text: "#bbf7d0"
+        };
+      case "info":
+      default:
+        return {
+          bg: "#020617",
+          border: "#1f2937",
+          text: "#e5e7eb"
+        };
+    }
+  };
+
   // ------------------------ Render ------------------------
 
   if (!currentUser) {
@@ -545,7 +629,7 @@ function App() {
           minHeight: "100vh",
           fontFamily:
             "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-          background: "#0f172a",
+          background: "#020617",
           color: "#f9fafb",
           padding: "2rem"
         }}
@@ -642,21 +726,29 @@ function App() {
           <span style={{ fontFamily: "monospace" }}>
             {contractAddress || "not set"}
           </span>
+          {currentUser.role !== "admin" && (
+            <span style={{ opacity: 0.7, marginLeft: "0.25rem" }}>
+              (managed by admin)
+            </span>
+          )}
         </div>
-        <button
-          onClick={() => setShowContractModal(true)}
-          style={{
-            background: "#111827",
-            color: "#e5e7eb",
-            border: "none",
-            padding: "0.4rem 0.9rem",
-            borderRadius: "999px",
-            cursor: "pointer",
-            fontSize: "0.8rem"
-          }}
-        >
-          Set contract
-        </button>
+
+        {currentUser.role === "admin" && (
+          <button
+            onClick={() => setShowContractModal(true)}
+            style={{
+              background: "#111827",
+              color: "#e5e7eb",
+              border: "none",
+              padding: "0.4rem 0.9rem",
+              borderRadius: "999px",
+              cursor: "pointer",
+              fontSize: "0.8rem"
+            }}
+          >
+            Set contract
+          </button>
+        )}
       </div>
     </div>
   );
@@ -668,6 +760,9 @@ function App() {
     account &&
     currentUser.ethAddress &&
     account.toLowerCase() !== currentUser.ethAddress.toLowerCase();
+
+  const variant = getStatusVariant();
+  const colors = variant ? getStatusColors(variant) : null;
 
   return (
     <div
@@ -727,7 +822,7 @@ function App() {
                 <span style={{ fontFamily: "monospace" }}>{userEth}</span>
                 {userEthMismatch && (
                   <span style={{ color: "#f97373", marginLeft: "0.25rem" }}>
-                    (⚠ MetaMask account is different)
+                    (MetaMask account is different)
                   </span>
                 )}
               </p>
@@ -778,18 +873,35 @@ function App() {
           </div>
         </div>
 
-        {status && (
+        {/* Improved notification bar: colored + spinner when loading */}
+        {status && colors && (
           <div
             style={{
               padding: "0.75rem 1rem",
               borderRadius: "0.75rem",
-              background: "#020617",
-              border: "1px solid #1f2937",
-              fontSize: "0.85rem"
+              background: colors.bg,
+              border: `1px solid ${colors.border}`,
+              fontSize: "0.85rem",
+              color: colors.text,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.6rem"
             }}
           >
-            {isLoading ? "⏳ " : "ℹ️ "}
-            {status}
+            {isLoading && (
+              <span
+                style={{
+                  width: "14px",
+                  height: "14px",
+                  borderRadius: "999px",
+                  border: "2px solid #38bdf8",
+                  borderTopColor: "transparent",
+                  display: "inline-block",
+                  animation: "sc-spin 0.7s linear infinite"
+                }}
+              />
+            )}
+            <span>{status}</span>
           </div>
         )}
 
@@ -829,13 +941,16 @@ function App() {
           />
         )}
 
-        <ContractModal
-          isOpen={showContractModal}
-          onClose={() => setShowContractModal(false)}
-          onSave={handleSaveContractAddress}
-          chainId={chainId || DEFAULT_CHAIN_ID}
-          currentAddress={contractAddress || ""}
-        />
+        {/* 🔒 Modal only exists for admin */}
+        {currentUser.role === "admin" && (
+          <ContractModal
+            isOpen={showContractModal}
+            onClose={() => setShowContractModal(false)}
+            onSave={handleSaveContractAddress}
+            chainId={chainId || DEFAULT_CHAIN_ID}
+            currentAddress={contractAddress || ""}
+          />
+        )}
       </div>
     </div>
   );

@@ -24,64 +24,74 @@ function LoginScreen({ onLogin, status }) {
 
   return (
     <div style={{ position: "relative" }}>
-      {/* LOGIN BOX */}
+      {/* LOGIN CARD – matches AdminDashboard cardStyle */}
       <div
         style={{
           background: "#020617",
           borderRadius: "1rem",
-          padding: "1.5rem",
+          marginTop: "9rem",
+          padding: "1.5rem 1.75rem",
           border: "1px solid #1e293b",
-          maxWidth: "360px",
+          maxWidth: "380px",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.35)"
         }}
       >
-        <h1 style={{ marginTop: 0, marginBottom: "1.5rem" }}>Log in</h1>
+        <h1
+          style={{
+            marginTop: 0,
+            marginBottom: "1.25rem",
+            fontSize: "1.9rem",
+            color: "#f1f5f9"
+          }}
+        >
+          Log in
+        </h1>
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={labelStyle}>
-              Username
-              <input
-                style={inputStyle}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
-            </label>
-          </div>
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+        >
+          <label style={labelStyle}>
+            Username
+            <input
+              style={inputStyle}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
+          </label>
 
-          <div style={{ marginBottom: "1.25rem" }}>
-            <label style={labelStyle}>
-              Password
-              <input
-                style={inputStyle}
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </label>
-          </div>
+          <label style={labelStyle}>
+            Password
+            <input
+              style={inputStyle}
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </label>
 
           <button
             type="submit"
-            style={{
-              background: "linear-gradient(to right, #22c55e, #38bdf8)",
-              color: "#020617",
-              border: "none",
-              padding: "0.75rem 1.2rem",
-              borderRadius: "0.75rem",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: "0.95rem",
-              width: "100%"
-            }}
+            style={primaryButtonStyle}
+            onMouseEnter={(e) => (e.target.style.opacity = 0.9)}
+            onMouseLeave={(e) => (e.target.style.opacity = 1)}
           >
             Sign in
           </button>
         </form>
 
         {status && (
-          <p style={{ marginTop: "1rem", fontSize: "0.85rem" }}>{status}</p>
+          <p
+            style={{
+              marginTop: "1rem",
+              fontSize: "0.9rem",
+              color: "#f87171"
+            }}
+          >
+            {status}
+          </p>
         )}
 
         <p
@@ -95,23 +105,12 @@ function LoginScreen({ onLogin, status }) {
         </p>
       </div>
 
-      {/* RESET BUTTON (OUTSIDE BOX, BOTTOM-LEFT) */}
+      {/* RESET BUTTON (same as before) */}
       <button
         onClick={handleDemoReset}
-        style={{
-          position: "absolute",
-          left: "-0.5rem",
-          bottom: "-2.5rem",
-          background: "#ef4444",
-          color: "#f9fafb",
-          padding: "0.3rem 0.6rem",
-          borderRadius: "0.4rem",
-          border: "1px solid #b91c1c",
-          cursor: "pointer",
-          fontSize: "0.7rem",
-          fontWeight: 600,
-          opacity: 0.85
-        }}
+        style={resetButtonStyle}
+        onMouseEnter={(e) => (e.target.style.opacity = 1)}
+        onMouseLeave={(e) => (e.target.style.opacity = 0.85)}
       >
         Reset
       </button>
@@ -119,23 +118,55 @@ function LoginScreen({ onLogin, status }) {
   );
 }
 
+/* Match AdminDashboard label + input styles */
+
 const labelStyle = {
   display: "block",
-  marginBottom: "0.5rem",
-  fontSize: "0.8rem",
-  fontWeight: 500
+  marginBottom: "0.35rem",
+  fontSize: "0.85rem",
+  fontWeight: 500,
+  color: "#e2e8f0"
 };
 
 const inputStyle = {
   width: "100%",
-  marginTop: "0.25rem",
-  padding: "0.5rem 0.6rem",
+  padding: "0.65rem 0.75rem",
   borderRadius: "0.6rem",
   border: "1px solid #374151",
   background: "#020617",
   color: "#f9fafb",
-  fontSize: "0.85rem",
-  outline: "none"
+  fontSize: "0.9rem",
+  outline: "none",
+  transition: "border 0.2s",
+  boxSizing: "border-box"
+};
+
+const primaryButtonStyle = {
+  background: "#38bdf8", // same style family as original
+  color: "#020617",
+  border: "none",
+  padding: "0.75rem 1.2rem",
+  borderRadius: "0.75rem",
+  cursor: "pointer",
+  fontWeight: 600,
+  fontSize: "0.95rem",
+  width: "100%",
+  transition: "opacity 0.15s"
+};
+
+const resetButtonStyle = {
+  position: "absolute",
+  left: "-0.5rem",
+  bottom: "-2.5rem",
+  background: "#ef4444",
+  color: "#f9fafb",
+  padding: "0.3rem 0.6rem",
+  borderRadius: "0.4rem",
+  border: "1px solid #b91c1c",
+  cursor: "pointer",
+  fontSize: "0.7rem",
+  fontWeight: 600,
+  opacity: 0.85
 };
 
 export default LoginScreen;

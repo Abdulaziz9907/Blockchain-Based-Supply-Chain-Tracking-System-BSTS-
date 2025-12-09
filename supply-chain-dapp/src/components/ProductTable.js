@@ -32,7 +32,7 @@ function ProductTable({ products, showOwner = true, actions }) {
             <th style={thStyle}>Price (ETH)</th>
             <th style={thStyle}>Quantity</th>
             <th style={thStyle}>Status</th>
-            {actions && <th style={thStyle}>Actions</th>}
+            {actions && <th style={thActionsStyle}>Actions</th>}
           </tr>
         </thead>
         <tbody>
@@ -54,7 +54,7 @@ function ProductTable({ products, showOwner = true, actions }) {
               <td style={tdStyle}>{p.price}</td>
               <td style={tdStyle}>{p.quantity}</td>
               <td style={tdStyle}>{p.status}</td>
-              {actions && <td style={tdStyle}>{actions(p)}</td>}
+              {actions && <td style={tdActionsStyle}>{actions(p)}</td>}
             </tr>
           ))}
           {products.length === 0 && (
@@ -77,9 +77,19 @@ const thStyle = {
   borderBottom: "1px solid #1f2937"
 };
 
+const thActionsStyle = {
+  ...thStyle,
+  textAlign: "center" 
+};
+
 const tdStyle = {
   padding: "0.5rem 0.75rem",
   borderBottom: "1px solid #111827"
+};
+
+const tdActionsStyle = {
+  ...tdStyle,
+  textAlign: "center" 
 };
 
 export default ProductTable;

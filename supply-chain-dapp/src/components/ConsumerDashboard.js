@@ -1,4 +1,3 @@
-// src/components/ConsumerDashboard.js
 import React, { useState } from "react";
 import ProductTable from "./ProductTable";
 
@@ -23,39 +22,18 @@ function ConsumerDashboard({
   };
 
   return (
-    <div
-      style={{
-        background: "#020617",
-        borderRadius: "1rem",
-        padding: "1.25rem 1.5rem",
-        border: "1px solid #1e293b"
-      }}
-    >
-      <h2 style={{ marginTop: 0, marginBottom: "0.75rem" }}>
-        Consumer Dashboard
-      </h2>
-      <p
-        style={{
-          marginTop: 0,
-          marginBottom: "1rem",
-          fontSize: "0.9rem",
-          color: "#e5e7eb"
-        }}
-      >
+    <div style={cardStyle}>
+      <h2 style={headerStyle}>Consumer Dashboard</h2>
+      <p style={textInfoStyle}>
         Welcome, {currentUser.username}. View approved products from suppliers,
         purchase them, and verify on-chain history.
       </p>
 
-      <h3 style={{ marginBottom: "0.5rem", fontSize: "1rem" }}>
-        Available Products
-      </h3>
+      <h3 style={subHeaderStyle}>Available Products</h3>
       <ProductTable
         products={available}
         actions={(p) => (
-          <button
-            onClick={() => onApprove(p)}
-            style={smallPrimaryButton}
-          >
+          <button onClick={() => onApprove(p)} style={smallPrimaryButton}>
             Approve (purchase)
           </button>
         )}
@@ -63,9 +41,8 @@ function ConsumerDashboard({
 
       <h3
         style={{
-          marginTop: "1.5rem",
-          marginBottom: "0.5rem",
-          fontSize: "1rem"
+          ...subHeaderStyle,
+          marginTop: "1.5rem"
         }}
       >
         Your Products
@@ -73,10 +50,7 @@ function ConsumerDashboard({
       <ProductTable
         products={myProducts}
         actions={(p) => (
-          <button
-            onClick={() => openHistory(p)}
-            style={smallSecondaryButton}
-          >
+          <button onClick={() => openHistory(p)} style={smallSecondaryButton}>
             View history
           </button>
         )}
@@ -137,8 +111,42 @@ function ConsumerDashboard({
   );
 }
 
+/* ---- shared card/typography with Admin/Producer/Supplier ---- */
+
+const cardStyle = {
+  background: "#020617",
+  borderRadius: "1rem",
+  padding: "1.5rem 1.75rem",
+  border: "1px solid #1e293b",
+  boxShadow: "0 4px 20px rgba(0,0,0,0.35)"
+};
+
+const headerStyle = {
+  marginTop: 0,
+  marginBottom: "0.75rem",
+  fontSize: "1.3rem",
+  color: "#f9fafb"
+};
+
+const subHeaderStyle = {
+  marginTop: "1rem",
+  marginBottom: "0.5rem",
+  fontSize: "1rem",
+  color: "#e5e7eb"
+};
+
+const textInfoStyle = {
+  marginTop: 0,
+  marginBottom: "1rem",
+  fontSize: "0.85rem",
+  color: "#e5e7eb",
+  lineHeight: 1.4
+};
+
+/* ---- buttons ---- */
+
 const smallPrimaryButton = {
-  background: "linear-gradient(to right, #38bdf8, #8b5cf6)",
+  background: "#00ba1cff",
   color: "#020617",
   border: "none",
   padding: "0.35rem 0.9rem",
@@ -158,6 +166,8 @@ const smallSecondaryButton = {
   fontSize: "0.75rem",
   fontWeight: 500
 };
+
+/* ---- history table ---- */
 
 const thStyle = {
   padding: "0.5rem 0.75rem",
