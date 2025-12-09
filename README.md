@@ -65,116 +65,88 @@ The address is stored per network in LocalStorage.
 ## Installation
 
 ```bash
-git clone <your-repo-url>
+git clone <repo-url>
 cd supply-chain-dapp
 npm install
 npm start
-Open in browser:
 
+Open in browser:
 http://localhost:3000
 
 Smart Contract Deployment (Remix)
 Open Remix: https://remix.ethereum.org
 
 Create file ProductsChain.sol
-
 Paste contract code
-
 Compile using Solidity version 0.8.20
 
 Deploy using the following:
 
 Environment: Injected Provider (MetaMask)
-
 Network: Sepolia
 
 Copy the deployed contract address (example below):
-
 0xA1B2c3D4e5F607890123456789aBCdEF1234abcd
 
 Configuring the DApp
 Step 1: Admin Login
-makefile
+defualt admin credentials
 username: admin
 password: admin
+
 Step 2: Set Contract Address
 Click “Set Contract” in the header
 
 Paste the deployed contract address
-
 Save the configuration
 
 The address is stored per network in LocalStorage.
 
 Role-Based User Guide
+
 Admin
 Admin capabilities:
-
 Create or delete users
-
 Edit the admin ETH address
-
 Configure the smart contract address
-
 View all registered users and their ETH addresses
-
-The admin ETH address is separate from the MetaMask address.
 
 Producer
 Producers can:
-
 Add new local products
-
 View products in the Pending list (temporary IDs such as #1, #2, etc.)
-
 Approve products to publish them on-chain
-
 Confirm MetaMask transactions
-
 After approval, products appear in the Approved list with real on-chain IDs
 
 Supplier
 Suppliers can:
-
 View all approved products
-
 Purchase products via MetaMask
-
 Become the on-chain owner of purchased products
 
 Consumer
 Consumers can:
-
 View products available from suppliers
-
 Purchase products via MetaMask
-
 View the complete on-chain product history, including:
-
 Previous owners
-
 Transfer timestamps
-
 Transfer roles (REGISTER, TO_SUPPLIER, TO_CONSUMER)
 
 MetaMask Integration Summary
 MetaMask is used for:
 
 Signing transactions
-
 Switching to Sepolia
-
 Reading sender address
 
 MetaMask is not used for:
-
 User authentication
-
 Storing user identity
-
 Users have their own ETH identity stored in LocalStorage.
 
-Local Storage Usage
+Local Storage Usage:
 Storage Key	Description
 sc_users_v1	User accounts and their ETH keypairs
 sc_products_v1	All pending and approved products
@@ -222,4 +194,4 @@ Ensure the address is a valid Ethereum address.
 
 License
 This project is intended for academic and educational use.
-You may modify or extend it as needed.
+
