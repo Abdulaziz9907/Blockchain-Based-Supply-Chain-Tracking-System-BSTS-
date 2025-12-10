@@ -38,13 +38,11 @@ function App() {
   const [contractAddress, setContractAddress] = useState(null);
   const [showContractModal, setShowContractModal] = useState(false);
 
-  // Remove white body margin + set global background + inject spinner keyframes
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.body.style.margin = "0";
       document.body.style.backgroundColor = "#020617";
 
-      // Inject spinner keyframes once
       const styleEl = document.createElement("style");
       styleEl.innerHTML = `
         @keyframes sc-spin {
@@ -123,10 +121,38 @@ function App() {
       const accounts = await ethereum.request({
         method: "eth_requestAccounts"
       });
-      setAccount(accounts[0]);
+      const connectedAccount = accounts[0];
+      setAccount(connectedAccount);
       const id = await ethereum.request({ method: "eth_chainId" });
       setChainId(id);
-      setStatus("Connected to MetaMask.");
+
+      // 🔹 If a non-admin user has no ETH address yet, bind this MetaMask address to their account
+      let boundAddress = false;
+      if (currentUser && currentUser.role !== "admin") {
+        if (!currentUser.ethAddress) {
+          boundAddress = true;
+
+          setUsers((prev) =>
+            prev.map((u) =>
+              u.id === currentUser.id
+                ? { ...u, ethAddress: connectedAccount, privateKey: "" }
+                : u
+            )
+          );
+
+          setCurrentUser((prev) =>
+            prev && prev.id === currentUser.id
+              ? { ...prev, ethAddress: connectedAccount, privateKey: "" }
+              : prev
+          );
+        }
+      }
+
+      setStatus(
+        boundAddress
+          ? "Connected to MetaMask and linked this wallet to your user profile."
+          : "Connected to MetaMask."
+      );
     } catch (err) {
       console.error(err);
       setStatus("User rejected MetaMask connection.");
@@ -197,7 +223,7 @@ function App() {
   const handleCreateUser = (newUser) => {
     if (!currentUser || currentUser.role !== "admin") return;
 
-    const { username, password, role } = newUser;
+    const { username, password, role, autoEth } = newUser;
 
     if (!username || !password || !role) {
       setStatus("Username, password, and role are required.");
@@ -212,22 +238,41 @@ function App() {
       return;
     }
 
-    // Always create a new Sepolia keypair for the user (non-admin)
-    const wallet = Wallet.createRandom();
-    const ethAddress = wallet.address;
-    const privateKey = wallet.privateKey;
+    const id = "u-" + Date.now().toString();
 
-    const user = {
-      id: "u-" + Date.now().toString(),
-      username,
-      password,
-      role,
-      ethAddress,
-      privateKey
-    };
+    let user;
+    if (autoEth !== false) {
+      // 🔹 default: generate a new Sepolia keypair
+      const wallet = Wallet.createRandom();
+      const ethAddress = wallet.address;
+      const privateKey = wallet.privateKey;
+
+      user = {
+        id,
+        username,
+        password,
+        role,
+        ethAddress,
+        privateKey
+      };
+    } else {
+      // 🔹 no ETH address yet; will be bound from MetaMask later
+      user = {
+        id,
+        username,
+        password,
+        role,
+        ethAddress: "",
+        privateKey: ""
+      };
+    }
 
     setUsers((prev) => [...prev, user]);
-    setStatus(`User '${username}' created successfully with ETH address.`);
+    setStatus(
+      autoEth !== false
+        ? `User '${username}' created successfully with ETH address.`
+        : `User '${username}' created successfully. ETH address will be set when they connect MetaMask.`
+    );
   };
 
   const handleDeleteUser = (userId) => {
@@ -873,7 +918,7 @@ function App() {
           </div>
         </div>
 
-        {/* Improved notification bar: colored + spinner when loading */}
+        {/* Improved notification bar: colored + spinner when loading + close button */}
         {status && colors && (
           <div
             style={{
@@ -901,7 +946,25 @@ function App() {
                 }}
               />
             )}
-            <span>{status}</span>
+
+            <span style={{ flex: 1 }}>{status}</span>
+
+            <button
+              type="button"
+              onClick={() => setStatus("")}
+              aria-label="Dismiss notification"
+              style={{
+                marginLeft: "0.5rem",
+                background: "transparent",
+                border: "none",
+                color: colors.text,
+                cursor: "pointer",
+                fontSize: "1rem",
+                lineHeight: 1
+              }}
+            >
+              ×
+            </button>
           </div>
         )}
 
@@ -941,7 +1004,7 @@ function App() {
           />
         )}
 
-        {/* 🔒 Modal only exists for admin */}
+        {/*  Modal only exists for admin */}
         {currentUser.role === "admin" && (
           <ContractModal
             isOpen={showContractModal}
@@ -1048,7 +1111,7 @@ function ContractModal({
             Contract address
             <input
               style={{
-                width: "100%",
+                width: "96%",
                 marginTop: "0.25rem",
                 padding: "0.5rem 0.6rem",
                 borderRadius: "0.6rem",
@@ -1103,7 +1166,7 @@ function ContractModal({
             <button
               type="submit"
               style={{
-                background: "linear-gradient(to right, #22c55e, #38bdf8)",
+                background: " #38bdf8",
                 color: "#020617",
                 border: "none",
                 padding: "0.5rem 0.9rem",

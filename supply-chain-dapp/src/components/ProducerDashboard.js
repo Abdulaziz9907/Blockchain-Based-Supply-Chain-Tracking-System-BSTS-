@@ -46,7 +46,7 @@ function ProducerDashboard({
           Name
           <input
             style={inputStyle}
-            placeholder="e.g., Fresh Apples"
+            placeholder="e.g., Apples"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             required
@@ -60,7 +60,7 @@ function ProducerDashboard({
             type="number"
             min="0"
             step="0.000000000000000001"
-            placeholder="e.g., 12.50"
+            placeholder="e.g., 3"
             value={form.price}
             onChange={(e) => setForm({ ...form, price: e.target.value })}
             required
@@ -73,7 +73,7 @@ function ProducerDashboard({
             style={inputStyle}
             type="number"
             min="1"
-            placeholder="e.g., 100"
+            placeholder="e.g., 5"
             value={form.quantity}
             onChange={(e) => setForm({ ...form, quantity: e.target.value })}
             required

@@ -56,7 +56,7 @@ export async function getProductsChainContract(setStatus) {
     if (setStatus) {
       setStatus(
         "No ProductsChain contract address set for Sepolia. " +
-          "Click 'Set contract' in the header and paste your deployed address."
+          "Check with admin to set the contract."
       );
     }
     throw new Error("no-contract");

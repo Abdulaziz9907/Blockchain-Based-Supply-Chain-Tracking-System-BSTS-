@@ -10,13 +10,24 @@ function AdminDashboard({
   const [form, setForm] = useState({
     username: "",
     password: "",
-    role: ""
+    role: "",
+    autoEth: true // 🔹 default: generate ETH address
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
     onCreateUser(form);
-    setForm({ username: "", password: "", role: "" });
+    // 🔹 keep latest toggle choice instead of forcing true
+    setForm((prev) => ({
+      username: "",
+      password: "",
+      role: "",
+      autoEth: prev.autoEth
+    }));
+  };
+
+  const toggleAutoEth = () => {
+    setForm((prev) => ({ ...prev, autoEth: !prev.autoEth }));
   };
 
   return (
@@ -32,8 +43,9 @@ function AdminDashboard({
         <h2 style={headerStyle}>Admin Dashboard</h2>
 
         <p style={textInfoStyle}>
-          Each new user automatically receives an Ethereum keypair
-          (address + private key). Keys are stored locally (demo only).
+          Each new user can automatically receive an Ethereum keypair
+          (address + private key), or you can let them bind their own MetaMask
+          address later. Keys are stored locally (demo only).
         </p>
 
         <h3 style={subHeaderStyle}>Existing Users</h3>
@@ -54,7 +66,9 @@ function AdminDashboard({
                   <td style={tdStyle}>{u.username}</td>
                   <td style={tdStyle}>{u.role}</td>
                   <td style={tdStyle}>
-                    <span style={{ fontFamily: "monospace", fontSize: "0.8rem" }}>
+                    <span
+                      style={{ fontFamily: "monospace", fontSize: "0.8rem" }}
+                    >
                       {u.username === "admin" ? "—" : u.ethAddress || "—"}
                     </span>
                   </td>
@@ -127,16 +141,75 @@ function AdminDashboard({
             </select>
           </label>
 
+          {/* 🔹 TOGGLE: Generate Ethereum keypair now */}
+          <div
+            style={{
+              marginTop: "0.3rem",
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.25rem"
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "0.75rem"
+              }}
+            >
+              <span style={{ fontSize: "0.85rem", color: "#e2e8f0" }}>
+                Generate Ethereum keypair now
+              </span>
+
+              {/* The pill toggle  */}
+              <div
+                onClick={toggleAutoEth}
+                style={{
+                  width: "40px",
+                  borderRadius: "999px",
+                  background: form.autoEth ? "#3b82f6" : "#1f2937",
+                  padding: "2px",
+                  display: "flex",
+                  justifyContent: form.autoEth ? "flex-end" : "flex-start",
+                  cursor: "pointer",
+                  transition:
+                    "background 0.2s ease, justify-content 0.2s ease"
+                }}
+              >
+                <div
+                  style={{
+                    width: "22px",
+                    height: "22px",
+                    borderRadius: "999px",
+                    background: "#f9fafb",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.4)"
+                  }}
+                />
+              </div>
+            </div>
+
+            <span
+              style={{
+                fontSize: "0.8rem",
+                color: "#9ca3af",
+                lineHeight: 1.4
+              }}
+            >
+              If off, the user’s ETH address will be set the first time they
+              log in and connect their MetaMask wallet.
+            </span>
+          </div>
+
           <button type="submit" style={primaryButtonStyle}>
-            Create user (with ETH address)
+            Create user
+            {form.autoEth && " (with ETH address)"}
           </button>
         </form>
       </section>
     </div>
   );
 }
-
-/* ------------------ SHARED STYLES (same as Login page) ------------------ */
 
 const cardStyle = {
   background: "#020617",
@@ -243,6 +316,7 @@ const tdStyle = {
   borderBottom: "1px solid #111827",
   color: "#d1d5db"
 };
+
 const deleteButton = {
   padding: "0.5rem 0.1rem",
   borderBottom: "1px solid #111827",
