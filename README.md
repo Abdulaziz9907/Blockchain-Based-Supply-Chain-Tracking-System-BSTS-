@@ -6,7 +6,7 @@ Built with Solidity, React, MetaMask, and Ethers v6
 
 ## Overview
 
-The Supply Chain Transparency DApp is a blockchain-powered system that tracks products throughout multiple supply chain stages. All transitions are recorded immutably on the Ethereum Sepolia testnet.
+The Supply Chain Tracking System is a blockchain-powered system that tracks products throughout multiple supply chain stages. All transitions are recorded immutably on the Ethereum Sepolia testnet.
 
 System roles:
 
@@ -44,7 +44,7 @@ MetaMask is used for:
 - Switching to the Sepolia network  
 - Reading the transaction signer address  
 
-MetaMask is not used for logging into the DApp.  
+MetaMask is not used for logging into the system.  
 Each user has an ETH address stored locally inside the application.
 
 ### Contract Configuration Modal
@@ -88,7 +88,7 @@ Network: Sepolia
 Copy the deployed contract address (example below):
 0xA1B2c3D4e5F607890123456789aBCdEF1234abcd
 
-Configuring the DApp
+Configuring the system
 Step 1: Admin Login
 defualt admin credentials
 username: admin
